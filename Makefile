@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 
 COMPOSE      ?= docker compose
+COMPOSE_DEV  ?= $(COMPOSE) -f compose.yaml -f compose.dev.yaml
 NETWORK      ?= agy-pool
 SQLC_VERSION ?= 1.31.1
 GO           ?= go
@@ -25,6 +26,19 @@ up: .env network ## собрать и поднять все контейнеры
 .PHONY: down
 down: ## остановить контейнеры (тома сохраняются)
 	$(COMPOSE) down
+
+.PHONY: up-dev
+up-dev: .env network ## как up, но с портами app, postgres и nats на 127.0.0.1
+	$(COMPOSE_DEV) up -d --build --wait
+
+.PHONY: down-dev
+down-dev: ## остановить контейнеры, поднятые up-dev (тома сохраняются)
+	$(COMPOSE_DEV) down
+
+.PHONY: config
+config: .env ## проверить compose.yaml и compose.dev.yaml
+	$(COMPOSE) config -q
+	$(COMPOSE_DEV) config -q
 
 .PHONY: build
 build: .env ## собрать образы
