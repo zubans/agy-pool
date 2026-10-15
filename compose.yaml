@@ -1,0 +1,78 @@
+name: agy-pool
+
+services:
+  app:
+    build:
+      context: .
+      target: app
+      args:
+        VERSION: ${AGY_POOL_VERSION:-dev}
+    image: agy-pool/app:${AGY_POOL_VERSION:-dev}
+    env_file: .env
+    volumes:
+      - agy_accounts:/data/accounts
+      - agy_skills:/data/skills
+      - agy_work:/data/work
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      sandboxd:
+        condition: service_healthy
+    networks:
+      default:
+      agy-pool:
+        aliases: [agy-pool]
+    # Порт наружу не публикуется: клиенты ходят по внешней сети agy-pool на http://agy-pool:8080.
+    restart: unless-stopped
+    # Остановка: до 30 с на завершение запросов и до 10 с на сброс NATS; по умолчанию Docker ждёт лишь 10 с.
+    stop_grace_period: 45s
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agy}
+      POSTGRES_USER: ${POSTGRES_USER:-agy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agy}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz?js-enabled-only=true"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  sandboxd:
+    build:
+      context: .
+      target: sandboxd
+      args:
+        VERSION: ${AGY_POOL_VERSION:-dev}
+    image: agy-pool/sandboxd:${AGY_POOL_VERSION:-dev}
+    restart: unless-stopped
+
+networks:
+  agy-pool:
+    external: true
+    name: agy-pool
+
+volumes:
+  agy_accounts:
+  agy_skills:
+  agy_work:
+  pg_data:
+  nats_data:

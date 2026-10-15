@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    # Ветки kb/** — рабочие ветки эпиков: тесты нужны до слияния в main.
+    branches: [main, 'kb/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Lint
+        run: make lint
+      # testcontainers поднимают PostgreSQL и NATS в Docker раннера.
+      - name: Test
+        run: make test
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: app
+          load: true
+          tags: agy-pool/app:ci
+      - name: agy is installed
+        run: docker run --rm --entrypoint agy agy-pool/app:ci --version
+      - name: Build sandboxd image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: sandboxd
+          tags: agy-pool/sandboxd:ci
